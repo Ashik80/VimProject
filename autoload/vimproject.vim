@@ -43,7 +43,7 @@ function! vimproject#cd(directory) abort
     let directory = fnamemodify(directory, ':p:h')
     call vimproject#record(directory)
     try
-        execute 'cd ' . fnameescape(directory)
+        execute 'tcd ' . fnameescape(directory)
         execute 'edit ' . fnameescape(directory)
         return 1
     catch

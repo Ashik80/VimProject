@@ -53,6 +53,13 @@ try
         call writefile([], s:direct . '/.project')
         VimProjectCd ~/Documents
         call assert_equal(s:direct, getcwd(), 'Cd should expand ~ and change cwd without a picker')
+        tabnew
+        execute 'VimProjectCd ' . fnameescape(s:plain)
+        call assert_equal(s:plain, getcwd(), 'Cd should change the current tab cwd')
+        tabprevious
+        call assert_equal(s:direct, getcwd(), 'Cd in another tab must preserve the original tab cwd')
+        tabnext
+        tabclose
         call assert_equal(s:direct, substitute(expand('%:p'), '/$', '', ''), 'Cd should edit the directory')
         call assert_equal([s:git, s:marker, s:direct], readfile(s:registry), 'Cd should record a newly visited project')
 
