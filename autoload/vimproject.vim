@@ -79,7 +79,7 @@ function! vimproject#term() abort
             let windows = win_findbuf(info.bufnr)
             if empty(windows)
                 execute 'botright sbuffer ' . info.bufnr
-                resize 12
+                execute 'resize ' . (&lines / 2)
             else
                 call win_gotoid(windows[0])
             endif
@@ -87,7 +87,7 @@ function! vimproject#term() abort
             return
         endfor
         botright new
-        resize 12
+        execute 'resize ' . (&lines / 2)
         let buffer = bufnr('%')
         if has('nvim')
             if termopen([&shell], {'cwd': directory}) <= 0

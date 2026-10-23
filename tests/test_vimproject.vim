@@ -229,6 +229,7 @@ try
     call assert_equal([], readfile(s:registry), 'Remove must work when no marker exists')
     call assert_true(isdirectory(s:git . '/.git'), 'Remove must never delete .git')
 
+    set lines=60
     call assert_equal(2, exists(':VimProjectTerm'))
     execute 'cd ' . fnameescape(s:git)
     let s:origin = win_getid()
@@ -239,6 +240,7 @@ try
     call assert_equal('terminal', &buftype)
     call assert_equal('git project-shell', fnamemodify(bufname('%'), ':t'), 'shell should use the project name')
     call assert_equal(s:windows + 1, winnr('$'), 'shell should open in a split')
+    call assert_equal(&lines / 2, winheight(0), 'new shell should take half the screen height')
     if has('nvim')
         call assert_equal('', nvim_win_get_config(0).relative, 'shell should not be floating')
     endif
@@ -268,6 +270,7 @@ try
     call assert_true(bufexists(s:shell), 'closing the split should keep the shell available')
     VimProjectTerm
     call assert_equal(s:shell, bufnr('%'), 'a hidden project shell should be reused')
+    call assert_equal(&lines / 2, winheight(0), 'reopened shell should take half the screen height')
 
     let s:twin = s:base . '/elsewhere/git project'
     call mkdir(s:twin, 'p')
@@ -276,6 +279,7 @@ try
     VimProjectTerm
     call s:WaitForShell(s:twin)
     call assert_notequal(s:shell, bufnr('%'), 'different projects with the same name need separate shells')
+    call assert_equal(&lines / 2, winheight(0), 'new shell should take half the screen with other splits open')
     call assert_equal('git project-shell', fnamemodify(bufname('%'), ':t'))
     call assert_equal(s:git, getbufvar(s:shell, 'vimproject_root'))
 
