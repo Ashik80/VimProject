@@ -105,6 +105,16 @@ try
         call assert_equal(4, len(readfile(s:registry)), 'selection should not duplicate entries')
     endif
 
+    let s:created_git = s:base . '/new-git-project'
+    call mkdir(s:created_git . '/.git', 'p')
+    let $FZF_DEFAULT_OPTS = '--filter=new-git-project'
+    call VimProjectCreate("printf '%s\\n' " . shellescape(s:created_git))
+    call s:WaitForPicker()
+    call assert_equal(s:created_git, getcwd(), 'Create should visit Git projects')
+    call assert_equal(s:created_git, substitute(expand('%:p'), '/$', '', ''))
+    call assert_equal('', getftype(s:created_git . '/.project'), 'Create must not add a marker when .git exists')
+    call assert_equal(s:created_git, readfile(s:registry)[-1], 'Create should record Git projects without a marker')
+
     let s:created = s:base . '/new-project quote'' | dir'
     call mkdir(s:created, 'p')
     let s:producer = "printf '%s\\n' " . shellescape(s:plain) . ' ' . shellescape(s:created)

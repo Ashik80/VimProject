@@ -147,7 +147,7 @@ function! s:Finish(state, status, timer) abort
             call s:Warn('The selected project directory no longer exists.')
             return
         endif
-        if a:state.action ==# 'create'
+        if a:state.action ==# 'create' && !isdirectory(selection[0] . '/.git')
             let marker = selection[0] . '/.project'
             if getftype(marker) ==# ''
                 call writefile([], marker, 'a')
