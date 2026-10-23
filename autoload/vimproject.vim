@@ -45,7 +45,66 @@ function! vimproject#cd(directory) abort
     try
         execute 'cd ' . fnameescape(directory)
         execute 'edit ' . fnameescape(directory)
+        return 1
     catch
+        call s:Warn(v:exception)
+    endtry
+endfunction
+
+function! vimproject#term() abort
+    let directory = getcwd()
+    if !isdirectory(directory . '/.git') && !filereadable(directory . '/.project')
+        call vimproject#pick('term')
+        return
+    endif
+    if !has('nvim') && (!has('terminal') || !has('job'))
+        call s:Warn('Vim needs terminal and job support.')
+        return
+    endif
+    call vimproject#record()
+    let window = win_getid()
+    let buffer = -1
+    try
+        for info in getbufinfo()
+            if getbufvar(info.bufnr, 'vimproject_root', '') !=# directory
+                continue
+            endif
+            let running = has('nvim')
+                        \ ? jobwait([getbufvar(info.bufnr, 'terminal_job_id')], 0)[0] == -1
+                        \ : term_getstatus(info.bufnr) =~# 'running'
+            if !running
+                execute 'silent! bwipeout! ' . info.bufnr
+                break
+            endif
+            let windows = win_findbuf(info.bufnr)
+            if empty(windows)
+                execute 'botright sbuffer ' . info.bufnr
+                resize 12
+            else
+                call win_gotoid(windows[0])
+            endif
+            startinsert
+            return
+        endfor
+        botright new
+        resize 12
+        let buffer = bufnr('%')
+        if has('nvim')
+            if termopen([&shell], {'cwd': directory}) <= 0
+                throw 'Could not start project shell.'
+            endif
+        elseif term_start([&shell], {'curwin': 1, 'cwd': directory}) <= 0
+            throw 'Could not start project shell.'
+        endif
+        setlocal bufhidden=hide
+        execute 'file ' . fnameescape(fnamemodify(directory, ':t') . '-shell')
+        let b:vimproject_root = directory
+        startinsert
+    catch
+        if buffer > 0 && bufexists(buffer)
+            execute 'silent! bwipeout! ' . buffer
+        endif
+        call win_gotoid(window)
         call s:Warn(v:exception)
     endtry
 endfunction
@@ -96,7 +155,9 @@ function! s:Finish(state, status, timer) abort
                 throw 'Cannot create project marker: ' . marker
             endif
         endif
-        call vimproject#cd(selection[0])
+        if vimproject#cd(selection[0]) && a:state.action ==# 'term'
+            call vimproject#term()
+        endif
     catch
         call s:Warn(v:exception)
     finally

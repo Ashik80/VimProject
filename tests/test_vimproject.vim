@@ -24,6 +24,15 @@ function! s:WaitForPicker() abort
     call assert_notequal('terminal', &buftype, 'picker should finish and close')
 endfunction
 
+function! s:WaitForShell(directory) abort
+    let attempts = 0
+    while get(b:, 'vimproject_root', '') !=# a:directory && attempts < 100
+        sleep 20m
+        let attempts += 1
+    endwhile
+    call assert_equal(a:directory, get(b:, 'vimproject_root', ''), 'project shell should be opened')
+endfunction
+
 try
     call assert_equal(2, exists(':VimProjectOpen'))
     call assert_equal(2, exists(':VimProjectCd'))
@@ -219,6 +228,102 @@ try
     call s:WaitForPicker()
     call assert_equal([], readfile(s:registry), 'Remove must work when no marker exists')
     call assert_true(isdirectory(s:git . '/.git'), 'Remove must never delete .git')
+
+    call assert_equal(2, exists(':VimProjectTerm'))
+    execute 'cd ' . fnameescape(s:git)
+    let s:origin = win_getid()
+    let s:windows = winnr('$')
+    let $FZF_DEFAULT_OPTS = '--filter=no-such-project'
+    VimProjectTerm
+    call s:WaitForShell(s:git)
+    call assert_equal('terminal', &buftype)
+    call assert_equal('git project-shell', fnamemodify(bufname('%'), ':t'), 'shell should use the project name')
+    call assert_equal(s:windows + 1, winnr('$'), 'shell should open in a split')
+    if has('nvim')
+        call assert_equal('', nvim_win_get_config(0).relative, 'shell should not be floating')
+    endif
+    let s:shell = bufnr('%')
+    let s:shell_window = win_getid()
+    let s:pwd_file = $HOME . '/shell-cwd'
+    let s:pwd_command = 'pwd > ' . shellescape(s:pwd_file) . "\n"
+    if has('nvim')
+        call chansend(b:terminal_job_id, s:pwd_command)
+    else
+        call term_sendkeys(s:shell, s:pwd_command)
+    endif
+    let s:attempts = 0
+    while !filereadable(s:pwd_file) && s:attempts < 100
+        sleep 20m
+        let s:attempts += 1
+    endwhile
+    call assert_equal([s:git], readfile(s:pwd_file), 'the shell process must start in the project root')
+
+    call win_gotoid(s:origin)
+    VimProjectTerm
+    call assert_equal(s:shell, bufnr('%'), 'a visible project shell should be reused')
+    call assert_equal(s:shell_window, win_getid(), 'reuse should focus the existing split')
+    call assert_equal(s:windows + 1, winnr('$'), 'reuse must not add another split')
+
+    hide close
+    call assert_true(bufexists(s:shell), 'closing the split should keep the shell available')
+    VimProjectTerm
+    call assert_equal(s:shell, bufnr('%'), 'a hidden project shell should be reused')
+
+    let s:twin = s:base . '/elsewhere/git project'
+    call mkdir(s:twin, 'p')
+    call writefile([], s:twin . '/.project')
+    execute 'cd ' . fnameescape(s:twin)
+    VimProjectTerm
+    call s:WaitForShell(s:twin)
+    call assert_notequal(s:shell, bufnr('%'), 'different projects with the same name need separate shells')
+    call assert_equal('git project-shell', fnamemodify(bufname('%'), ':t'))
+    call assert_equal(s:git, getbufvar(s:shell, 'vimproject_root'))
+
+    call win_gotoid(s:origin)
+    execute 'cd ' . fnameescape(s:plain)
+    let s:original_buffer = bufnr('%')
+    VimProjectTerm
+    call s:WaitForPicker()
+    call assert_equal(s:plain, getcwd(), 'no match must not change cwd or launch a project shell')
+    call assert_equal(s:original_buffer, bufnr('%'))
+
+    call vimproject#record(s:marker)
+    let $FZF_DEFAULT_OPTS = '--filter=' . shellescape(s:marker)
+    VimProjectTerm
+    call s:WaitForShell(s:marker)
+    call assert_equal(s:marker, getcwd(), 'picker selection should cd into the project')
+    call assert_equal('marker project-shell', fnamemodify(bufname('%'), ':t'))
+    let s:marker_shell = bufnr('%')
+    let s:marker_window = win_getid()
+    call win_gotoid(s:origin)
+    call assert_equal(s:marker, substitute(expand('%:p'), '/$', '', ''), 'picker selection should use vimproject#cd to edit the directory')
+
+    tabnew
+    VimProjectTerm
+    call assert_equal(s:marker_shell, bufnr('%'), 'a shell in another tab should be reused')
+    call assert_equal(s:marker_window, win_getid())
+
+    if has('nvim')
+        call chansend(b:terminal_job_id, "exit\n")
+    else
+        call term_sendkeys(s:marker_shell, "exit\n")
+    endif
+    let s:attempts = 0
+    while s:attempts < 100
+        let s:running = has('nvim')
+                    \ ? jobwait([getbufvar(s:marker_shell, 'terminal_job_id')], 0)[0] == -1
+                    \ : term_getstatus(s:marker_shell) =~# 'running'
+        if !s:running
+            break
+        endif
+        sleep 20m
+        let s:attempts += 1
+    endwhile
+    call assert_false(s:running, 'the test shell should exit')
+    VimProjectTerm
+    call s:WaitForShell(s:marker)
+    call assert_notequal(s:marker_shell, bufnr('%'), 'an exited shell should be replaced')
+    call assert_equal('marker project-shell', fnamemodify(bufname('%'), ':t'))
 catch
     call add(v:errors, v:exception . ' at ' . v:throwpoint)
 endtry
