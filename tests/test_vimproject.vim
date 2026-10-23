@@ -95,6 +95,62 @@ try
         call assert_equal(s:plain, getcwd(), 'deleted project must not change cwd')
         call assert_equal(4, len(readfile(s:registry)), 'selection should not duplicate entries')
     endif
+
+    let s:created = s:base . '/new-project quote'' | dir'
+    call mkdir(s:created, 'p')
+    let s:producer = "printf '%s\\n' " . shellescape(s:plain) . ' ' . shellescape(s:created)
+    let $FZF_DEFAULT_OPTS = '--filter=new-project'
+    call VimProjectCreate(s:producer)
+    call s:WaitForPicker()
+    call assert_equal(s:created, getcwd(), 'Create should visit the selected directory')
+    call assert_equal(s:created, substitute(expand('%:p'), '/$', '', ''))
+    call assert_true(filereadable(s:created . '/.project'), 'Create should add a project marker')
+    call assert_false(filereadable(s:plain . '/.project'), 'unselected directories must not be changed')
+    let s:projects = readfile(s:registry)
+    call assert_equal(s:created, s:projects[-1], 'Create should record the selected directory')
+
+    call writefile(['keep existing contents'], s:created . '/.project')
+    call VimProjectCreate(s:producer)
+    call s:WaitForPicker()
+    call assert_equal(['keep existing contents'], readfile(s:created . '/.project'), 'existing markers must not be overwritten')
+    call assert_equal(s:projects, readfile(s:registry), 'creating twice must not duplicate the project')
+
+    let s:shell = &shell
+    set shell=/bin/bash
+    call VimProjectCreate('directories=(' . shellescape(s:created) . "); printf '%s\\n' \"${directories[@]}\"")
+    call s:WaitForPicker()
+    let &shell = s:shell
+    call assert_equal(s:created, getcwd(), 'Create should support Bash syntax when shell is Bash')
+    call assert_equal(s:projects, readfile(s:registry))
+
+    let $FZF_DEFAULT_OPTS = '--filter=no-such-project'
+    call VimProjectCreate(s:producer)
+    call s:WaitForPicker()
+    call assert_equal(s:created, getcwd(), 'no match must not change cwd')
+    call assert_false(filereadable(s:plain . '/.project'), 'no match must not create a marker')
+    call assert_equal(s:projects, readfile(s:registry))
+
+    let $FZF_DEFAULT_OPTS = '--filter=missing'
+    call VimProjectCreate("printf '%s\\n' " . shellescape(s:base . '/missing'))
+    call s:WaitForPicker()
+    call assert_equal(s:created, getcwd(), 'invalid selection must not change cwd')
+    call assert_equal(s:projects, readfile(s:registry))
+
+    let s:blocked = s:base . '/blocked-project'
+    call mkdir(s:blocked . '/.project', 'p')
+    let $FZF_DEFAULT_OPTS = '--filter=blocked-project'
+    call VimProjectCreate("printf '%s\\n' " . shellescape(s:blocked))
+    call s:WaitForPicker()
+    call assert_equal(s:created, getcwd(), 'failure to create a marker must not change cwd')
+    call assert_equal(s:projects, readfile(s:registry))
+
+    call delete(s:registry)
+    let $FZF_DEFAULT_OPTS = '--filter=plain'
+    call VimProjectCreate(s:producer)
+    call s:WaitForPicker()
+    call assert_equal(s:plain, getcwd(), 'Create should work without an existing registry')
+    call assert_true(filereadable(s:plain . '/.project'))
+    call assert_equal([s:plain], readfile(s:registry))
 catch
     call add(v:errors, v:exception . ' at ' . v:throwpoint)
 endtry

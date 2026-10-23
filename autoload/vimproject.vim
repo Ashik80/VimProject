@@ -69,6 +69,14 @@ function! s:Finish(state, status, timer) abort
             call s:Warn('The selected project directory no longer exists.')
             return
         endif
+        if a:state.create
+            let marker = selection[0] . '/.project'
+            if getftype(marker) ==# ''
+                call writefile([], marker, 'a')
+            elseif !filereadable(marker)
+                throw 'Cannot create project marker: ' . marker
+            endif
+        endif
         call vimproject#cd(selection[0])
     catch
         call s:Warn(v:exception)
@@ -83,6 +91,19 @@ function! s:Exited(state, job, status, ...) abort
 endfunction
 
 function! vimproject#pick() abort
+    let registry = s:Registry()
+    if !filereadable(registry) || empty(readfile(registry))
+        call s:Warn('No projects recorded yet.')
+        return
+    endif
+    call s:Pick('fzf --no-multi < ' . shellescape(registry), 0)
+endfunction
+
+function! vimproject#create(command) abort
+    call s:Pick('(' . a:command . "\n) | fzf --no-multi", 1)
+endfunction
+
+function! s:Pick(command, create) abort
     if !executable('fzf')
         call s:Warn('fzf is not installed.')
         return
@@ -91,13 +112,8 @@ function! vimproject#pick() abort
         call s:Warn('Vim needs terminal and job support.')
         return
     endif
-    let registry = s:Registry()
-    if !filereadable(registry) || empty(readfile(registry))
-        call s:Warn('No projects recorded yet.')
-        return
-    endif
-    let state = {'window': win_getid(), 'output': tempname(), 'buffer': -1}
-    let command = ['sh', '-c', 'fzf --no-multi < ' . shellescape(registry) . ' > ' . shellescape(state.output)]
+    let state = {'window': win_getid(), 'output': tempname(), 'buffer': -1, 'create': a:create}
+    let command = [&shell, &shellcmdflag, a:command . ' > ' . shellescape(state.output)]
     try
         if has('nvim')
             let state.buffer = nvim_create_buf(v:false, v:true)
