@@ -65,11 +65,30 @@ function! s:Finish(state, status, timer) abort
             endif
             return
         endif
-        if len(selection) != 1 || !isdirectory(selection[0])
+        if len(selection) != 1
+            return
+        endif
+        if a:state.action ==# 'remove'
+            echo 'Remove project "' . selection[0] . '" from the list and delete its .project file? [y/N] '
+            let answer = getcharstr()
+            echo ''
+            if answer ==? 'y'
+                let registry = s:Registry()
+                let projects = readfile(registry)
+                let marker = selection[0] . '/.project'
+                if getftype(marker) !=# '' && delete(marker) != 0
+                    throw 'Cannot remove project marker: ' . marker
+                endif
+                call filter(projects, 'v:val !=# selection[0]')
+                call writefile(projects, registry)
+            endif
+            return
+        endif
+        if !isdirectory(selection[0])
             call s:Warn('The selected project directory no longer exists.')
             return
         endif
-        if a:state.create
+        if a:state.action ==# 'create'
             let marker = selection[0] . '/.project'
             if getftype(marker) ==# ''
                 call writefile([], marker, 'a')
@@ -90,20 +109,20 @@ function! s:Exited(state, job, status, ...) abort
     call timer_start(0, function('s:Finish', [a:state, a:status]))
 endfunction
 
-function! vimproject#pick() abort
+function! vimproject#pick(...) abort
     let registry = s:Registry()
     if !filereadable(registry) || empty(readfile(registry))
         call s:Warn('No projects recorded yet.')
         return
     endif
-    call s:Pick('fzf --no-multi < ' . shellescape(registry), 0)
+    call s:Pick('fzf --no-multi < ' . shellescape(registry), a:0 ? a:1 : 'open')
 endfunction
 
 function! vimproject#create(command) abort
-    call s:Pick('(' . a:command . "\n) | fzf --no-multi", 1)
+    call s:Pick('(' . a:command . "\n) | fzf --no-multi", 'create')
 endfunction
 
-function! s:Pick(command, create) abort
+function! s:Pick(command, action) abort
     if !executable('fzf')
         call s:Warn('fzf is not installed.')
         return
@@ -112,7 +131,7 @@ function! s:Pick(command, create) abort
         call s:Warn('Vim needs terminal and job support.')
         return
     endif
-    let state = {'window': win_getid(), 'output': tempname(), 'buffer': -1, 'create': a:create}
+    let state = {'window': win_getid(), 'output': tempname(), 'buffer': -1, 'action': a:action}
     let command = [&shell, &shellcmdflag, a:command . ' > ' . shellescape(state.output)]
     try
         if has('nvim')

@@ -151,6 +151,74 @@ try
     call assert_equal(s:plain, getcwd(), 'Create should work without an existing registry')
     call assert_true(filereadable(s:plain . '/.project'))
     call assert_equal([s:plain], readfile(s:registry))
+
+    call assert_equal(2, exists(':VimProjectRemove'))
+    let s:projects = [s:plain, s:git, s:created, s:special]
+    call writefile(s:projects, s:registry)
+    let s:buffer = bufnr('%')
+    let $FZF_DEFAULT_OPTS = '--filter=plain'
+    call feedkeys('n', 't')
+    VimProjectRemove
+    call s:WaitForPicker()
+    call assert_equal(s:projects, readfile(s:registry), 'No must leave the project list unchanged')
+    call assert_true(filereadable(s:plain . '/.project'), 'No must preserve the marker')
+
+    call feedkeys("\<CR>", 't')
+    VimProjectRemove
+    call s:WaitForPicker()
+    call assert_equal(s:projects, readfile(s:registry), 'confirmation must default to No')
+
+    call feedkeys("\<Esc>", 't')
+    VimProjectRemove
+    call s:WaitForPicker()
+    call assert_equal(s:projects, readfile(s:registry), 'Esc must leave the project list unchanged')
+
+    call feedkeys('y', 't')
+    VimProjectRemove
+    call s:WaitForPicker()
+    call assert_equal(s:projects[1:], readfile(s:registry), 'Yes must remove only the selected entry')
+    call assert_equal(s:plain, getcwd(), 'Remove must not change cwd or re-record the current project')
+    call assert_equal(s:buffer, bufnr('%'), 'Remove must preserve the original buffer')
+    call assert_true(isdirectory(s:plain), 'Remove must not delete the directory')
+    call assert_equal('', getftype(s:plain . '/.project'), 'confirmed removal must delete the marker')
+
+    let $FZF_DEFAULT_OPTS = '--filter=' . shellescape('!new-project quote')
+    call feedkeys('y', 't')
+    VimProjectRemove
+    call s:WaitForPicker()
+    call assert_equal([s:git, s:created], readfile(s:registry), 'Remove should also forget a deleted directory')
+
+    let $FZF_DEFAULT_OPTS = '--filter=no-such-project'
+    VimProjectRemove
+    call s:WaitForPicker()
+    call assert_equal([s:git, s:created], readfile(s:registry), 'no match must leave the list unchanged')
+
+    call writefile([s:created], s:registry)
+    let $FZF_DEFAULT_OPTS = '--filter=new-project'
+    call feedkeys('y', 't')
+    VimProjectRemove
+    call s:WaitForPicker()
+    call assert_equal([], readfile(s:registry), 'Remove should allow an empty project list')
+    call assert_equal('', getftype(s:created . '/.project'), 'confirmed removal must delete a nonempty marker too')
+    call assert_true(isdirectory(s:created), 'the project directory must remain')
+    VimProjectRemove
+    call assert_equal(s:buffer, bufnr('%'), 'an empty list should not open a picker')
+
+    call writefile([s:blocked], s:registry)
+    let $FZF_DEFAULT_OPTS = '--filter=blocked-project'
+    call feedkeys('y', 't')
+    VimProjectRemove
+    call s:WaitForPicker()
+    call assert_true(isdirectory(s:blocked . '/.project'), 'Remove must not delete a directory named .project')
+    call assert_equal([s:blocked], readfile(s:registry), 'failure to delete the marker must preserve the registry entry')
+
+    call writefile([s:git], s:registry)
+    let $FZF_DEFAULT_OPTS = '--filter=' . shellescape(s:git)
+    call feedkeys('y', 't')
+    VimProjectRemove
+    call s:WaitForPicker()
+    call assert_equal([], readfile(s:registry), 'Remove must work when no marker exists')
+    call assert_true(isdirectory(s:git . '/.git'), 'Remove must never delete .git')
 catch
     call add(v:errors, v:exception . ' at ' . v:throwpoint)
 endtry
