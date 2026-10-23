@@ -39,13 +39,26 @@ try
         call assert_equal([s:git, s:marker], readfile(s:registry), 'record both markers, not plain dirs or duplicates')
         call assert_equal(['*.swp', '/.projects'], readfile(s:ignore), 'ignore rule should not be duplicated')
 
-        let $FZF_DEFAULT_OPTS = '--filter=' . shellescape(s:marker)
-        let s:buffer = bufnr('%')
-        VimProjectCd
-        call s:WaitForPicker()
-        call assert_equal(s:marker, getcwd(), 'Cd should change cwd')
-        call assert_equal(s:buffer, bufnr('%'), 'Cd should preserve the original buffer')
+        let s:direct = $HOME . '/Documents'
+        call mkdir(s:direct, 'p')
+        call writefile([], s:direct . '/.project')
+        VimProjectCd ~/Documents
+        call assert_equal(s:direct, getcwd(), 'Cd should expand ~ and change cwd without a picker')
+        call assert_equal(s:direct, substitute(expand('%:p'), '/$', '', ''), 'Cd should edit the directory')
+        call assert_equal([s:git, s:marker, s:direct], readfile(s:registry), 'Cd should record a newly visited project')
 
+        execute 'VimProjectCd ' . fnameescape(s:plain)
+        call assert_equal(s:plain, getcwd(), 'Cd should also visit non-project directories')
+        call assert_equal(s:plain, substitute(expand('%:p'), '/$', '', ''))
+        call assert_equal([s:git, s:marker, s:direct], readfile(s:registry), 'Cd should not record non-project directories')
+        execute 'VimProjectCd ' . fnameescape(s:marker)
+        call assert_equal(s:marker, getcwd(), 'Cd should handle escaped spaces')
+
+        VimProjectCd ~/missing-directory
+        call assert_equal(s:marker, getcwd(), 'invalid directory should not change cwd')
+        call assert_equal(3, len(readfile(s:registry)), 'invalid directory should not be recorded')
+
+        enew
         call setline(1, 'unsaved changes')
         setlocal modified
         set nohidden
@@ -53,7 +66,7 @@ try
         VimProjectOpen
         call s:WaitForPicker()
         call assert_equal('unsaved changes', getline(1), 'Open must not discard unsaved changes')
-        call assert_equal(s:marker, getcwd(), 'failed edit must not change cwd')
+        call assert_equal(s:git, getcwd(), 'Cd runs before edit, even when edit is blocked by unsaved changes')
         setlocal nomodified
 
         VimProjectOpen
@@ -62,7 +75,7 @@ try
         call assert_equal(s:git, substitute(expand('%:p'), '/$', '', ''), 'Open should edit the selected directory')
 
         let $FZF_DEFAULT_OPTS = '--filter=no-such-project'
-        VimProjectCd
+        VimProjectOpen
         call s:WaitForPicker()
         call assert_equal(s:git, getcwd(), 'no match must not change cwd')
 
@@ -71,16 +84,16 @@ try
         execute 'cd ' . fnameescape(s:special)
         execute 'cd ' . fnameescape(s:plain)
         let $FZF_DEFAULT_OPTS = '--filter=quote'
-        VimProjectCd
-        call s:WaitForPicker()
+        execute 'VimProjectCd ' . fnameescape(s:special)
         call assert_equal(s:special, getcwd(), 'paths must not be interpreted as commands')
+        call assert_equal(s:special, substitute(expand('%:p'), '/$', '', ''))
 
         call delete(s:special, 'rf')
         execute 'cd ' . fnameescape(s:plain)
-        VimProjectCd
+        VimProjectOpen
         call s:WaitForPicker()
         call assert_equal(s:plain, getcwd(), 'deleted project must not change cwd')
-        call assert_equal(3, len(readfile(s:registry)), 'selection should not duplicate entries')
+        call assert_equal(4, len(readfile(s:registry)), 'selection should not duplicate entries')
     endif
 catch
     call add(v:errors, v:exception . ' at ' . v:throwpoint)

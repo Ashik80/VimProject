@@ -8,8 +8,8 @@ function! s:Warn(message) abort
     echohl None
 endfunction
 
-function! vimproject#record() abort
-    let directory = getcwd()
+function! vimproject#record(...) abort
+    let directory = a:0 ? a:1 : getcwd()
     if !isdirectory(directory . '/.git') && !filereadable(directory . '/.project')
         return
     endif
@@ -34,6 +34,22 @@ function! vimproject#record() abort
     endtry
 endfunction
 
+function! vimproject#cd(directory) abort
+    let directory = expand(a:directory)
+    if !isdirectory(directory)
+        call s:Warn('The directory does not exist: ' . directory)
+        return
+    endif
+    let directory = fnamemodify(directory, ':p:h')
+    call vimproject#record(directory)
+    try
+        execute 'cd ' . fnameescape(directory)
+        execute 'edit ' . fnameescape(directory)
+    catch
+        call s:Warn(v:exception)
+    endtry
+endfunction
+
 function! s:Finish(state, status, timer) abort
     try
         let selection = filereadable(a:state.output) ? readfile(a:state.output) : []
@@ -53,11 +69,7 @@ function! s:Finish(state, status, timer) abort
             call s:Warn('The selected project directory no longer exists.')
             return
         endif
-        if a:state.open
-            execute 'edit ' . fnameescape(selection[0])
-        endif
-        execute 'cd ' . fnameescape(selection[0])
-        call vimproject#record()
+        call vimproject#cd(selection[0])
     catch
         call s:Warn(v:exception)
     finally
@@ -70,7 +82,7 @@ function! s:Exited(state, job, status, ...) abort
     call timer_start(0, function('s:Finish', [a:state, a:status]))
 endfunction
 
-function! vimproject#pick(open) abort
+function! vimproject#pick() abort
     if !executable('fzf')
         call s:Warn('fzf is not installed.')
         return
@@ -84,7 +96,7 @@ function! vimproject#pick(open) abort
         call s:Warn('No projects recorded yet.')
         return
     endif
-    let state = {'open': a:open, 'window': win_getid(), 'output': tempname(), 'buffer': -1}
+    let state = {'window': win_getid(), 'output': tempname(), 'buffer': -1}
     let command = ['sh', '-c', 'fzf --no-multi < ' . shellescape(registry) . ' > ' . shellescape(state.output)]
     try
         if has('nvim')

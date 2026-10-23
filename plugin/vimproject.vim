@@ -3,8 +3,8 @@ if exists('g:loaded_vimproject')
 endif
 let g:loaded_vimproject = 1
 
-command! VimProjectOpen call vimproject#pick(1)
-command! VimProjectCd call vimproject#pick(0)
+command! VimProjectOpen call vimproject#pick()
+command! -nargs=1 -complete=dir VimProjectCd call vimproject#cd(<f-args>)
 
 augroup vimproject
     autocmd!
