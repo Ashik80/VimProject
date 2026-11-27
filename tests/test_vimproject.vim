@@ -248,6 +248,7 @@ try
 
     set lines=60
     call assert_equal(2, exists(':VimProjectTerm'))
+    call assert_equal(2, exists(':VimProjectTermNew'))
     execute 'cd ' . fnameescape(s:git)
     let s:origin = win_getid()
     let s:windows = winnr('$')
@@ -345,6 +346,17 @@ try
     call s:WaitForShell(s:marker)
     call assert_notequal(s:marker_shell, bufnr('%'), 'an exited shell should be replaced')
     call assert_equal('marker project-shell', fnamemodify(bufname('%'), ':t'))
+    let s:replaced_shell = bufnr('%')
+
+    VimProjectTermNew
+    call s:WaitForShell(s:marker)
+    call assert_notequal(s:replaced_shell, bufnr('%'), 'TermNew should start another shell')
+    call assert_equal('marker project-shell-2', fnamemodify(bufname('%'), ':t'), 'the second shell gets the suffix 2')
+    VimProjectTermNew
+    call s:WaitForShell(s:marker)
+    call assert_equal('marker project-shell-3', fnamemodify(bufname('%'), ':t'), 'further shells increment the suffix')
+    VimProjectTerm
+    call assert_equal(s:replaced_shell, bufnr('%'), 'Term should still reuse the unsuffixed shell after TermNew')
 catch
     call add(v:errors, v:exception . ' at ' . v:throwpoint)
 endtry

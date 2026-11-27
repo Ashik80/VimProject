@@ -51,10 +51,28 @@ function! vimproject#cd(directory) abort
     endtry
 endfunction
 
-function! vimproject#term() abort
+function! s:ShellName(directory, fresh) abort
+    let name = fnamemodify(a:directory, ':t') . '-shell'
+    if !a:fresh
+        return name
+    endif
+    let suffix = 2
+    for info in getbufinfo()
+        let tail = fnamemodify(info.name, ':t')
+        if getbufvar(info.bufnr, 'vimproject_root', '') !=# a:directory
+                    \ || tail !~# '^\V' . escape(name, '\') . '\-\d\+\$'
+            continue
+        endif
+        let suffix = max([suffix, str2nr(matchstr(tail, '\d\+$')) + 1])
+    endfor
+    return name . '-' . suffix
+endfunction
+
+function! vimproject#term(...) abort
+    let fresh = a:0 && a:1
     let directory = getcwd()
     if !isdirectory(directory . '/.git') && !filereadable(directory . '/.project')
-        call vimproject#pick('term')
+        call vimproject#pick(fresh ? 'termnew' : 'term')
         return
     endif
     if !has('nvim') && (!has('terminal') || !has('job'))
@@ -65,7 +83,7 @@ function! vimproject#term() abort
     let window = win_getid()
     let buffer = -1
     try
-        for info in getbufinfo()
+        for info in fresh ? [] : getbufinfo()
             if getbufvar(info.bufnr, 'vimproject_root', '') !=# directory
                 continue
             endif
@@ -97,7 +115,7 @@ function! vimproject#term() abort
             throw 'Could not start project shell.'
         endif
         setlocal bufhidden=hide
-        execute 'file ' . fnameescape(fnamemodify(directory, ':t') . '-shell')
+        execute 'file ' . fnameescape(s:ShellName(directory, fresh))
         let b:vimproject_root = directory
         startinsert
     catch
@@ -155,8 +173,8 @@ function! s:Finish(state, status, timer) abort
                 throw 'Cannot create project marker: ' . marker
             endif
         endif
-        if vimproject#cd(selection[0]) && a:state.action ==# 'term'
-            call vimproject#term()
+        if vimproject#cd(selection[0]) && a:state.action =~# '^term'
+            call vimproject#term(a:state.action ==# 'termnew')
         endif
     catch
         call s:Warn(v:exception)
