@@ -16,6 +16,7 @@ A directory counts as a project if it contains a `.git` folder or an empty `.pro
 | `:VimProjectOpen` | Pick a saved project. Changes into it and opens its directory. |
 | `:VimProjectTerm` | Open a shell in the current project (or pick one first). Reuses the project's shell if it is already running. |
 | `:VimProjectTermNew` | Open another shell in the current project (or pick one first), named `<project>-shell-2`, `<project>-shell-3`, and so on. |
+| `:VimProjectTermList` | Pick one of the shells already open for the current project and switch to it. Jumps straight to it when only one is open. |
 | `:VimProjectCd {dir}` | Change into any directory and open it. Projects are saved automatically. |
 | `:VimProjectRemove` | Pick a saved project and forget it. Asks first, then deletes its `.project` marker (never the directory or `.git`). |
 | `VimProjectCreate({cmd})` | Run `{cmd}` to list directories, pick one with fzf, and turn it into a project by adding a `.project` marker (skipped if it has `.git`). |

@@ -24,6 +24,14 @@ function! s:WaitForPicker() abort
     call assert_notequal('terminal', &buftype, 'picker should finish and close')
 endfunction
 
+function! s:WaitForBuffer(name) abort
+    let attempts = 0
+    while fnamemodify(bufname('%'), ':t') !=# a:name && attempts < 100
+        sleep 20m
+        let attempts += 1
+    endwhile
+endfunction
+
 function! s:WaitForShell(directory) abort
     let attempts = 0
     while get(b:, 'vimproject_root', '') !=# a:directory && attempts < 100
@@ -249,6 +257,7 @@ try
     set lines=60
     call assert_equal(2, exists(':VimProjectTerm'))
     call assert_equal(2, exists(':VimProjectTermNew'))
+    call assert_equal(2, exists(':VimProjectTermList'))
     execute 'cd ' . fnameescape(s:git)
     let s:origin = win_getid()
     let s:windows = winnr('$')
@@ -357,6 +366,17 @@ try
     call assert_equal('marker project-shell-3', fnamemodify(bufname('%'), ':t'), 'further shells increment the suffix')
     VimProjectTerm
     call assert_equal(s:replaced_shell, bufnr('%'), 'Term should still reuse the unsuffixed shell after TermNew')
+
+    let $FZF_DEFAULT_OPTS = '--filter=' . shellescape('marker project-shell-2')
+    let s:list_windows = winnr('$')
+    VimProjectTermList
+    call s:WaitForBuffer('marker project-shell-2')
+    call assert_equal('marker project-shell-2', fnamemodify(bufname('%'), ':t'), 'TermList should switch to the picked shell')
+    call assert_equal(s:list_windows, winnr('$'), 'the picker must not leave a split behind')
+
+    execute 'cd ' . fnameescape(s:git)
+    VimProjectTermList
+    call assert_equal(s:shell, bufnr('%'), 'a single shell should be focused without a picker')
 catch
     call add(v:errors, v:exception . ' at ' . v:throwpoint)
 endtry

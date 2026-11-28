@@ -127,6 +127,37 @@ function! vimproject#term(...) abort
     endtry
 endfunction
 
+function! vimproject#termlist() abort
+    let directory = getcwd()
+    let shells = {}
+    for info in getbufinfo()
+        if getbufvar(info.bufnr, 'vimproject_root', '') ==# directory
+            let shells[fnamemodify(info.name, ':t')] = info.bufnr
+        endif
+    endfor
+    if empty(shells)
+        call s:Warn('No project shells are open.')
+        return
+    endif
+    let names = sort(keys(shells))
+    if len(names) == 1
+        call s:Focus(shells[names[0]])
+        return
+    endif
+    call s:Pick('printf "%s\n" ' . join(map(names, 'shellescape(v:val)')) . ' | fzf --no-multi',
+                \ 'shell', {'shells': shells})
+endfunction
+
+function! s:Focus(buffer) abort
+    let windows = win_findbuf(a:buffer)
+    if empty(windows)
+        execute 'hide buffer ' . a:buffer
+    else
+        call win_gotoid(windows[0])
+    endif
+    startinsert
+endfunction
+
 function! s:Finish(state, status, timer) abort
     try
         let selection = filereadable(a:state.output) ? readfile(a:state.output) : []
@@ -158,6 +189,13 @@ function! s:Finish(state, status, timer) abort
                 endif
                 call filter(projects, 'v:val !=# selection[0]')
                 call writefile(projects, registry)
+            endif
+            return
+        endif
+        if a:state.action ==# 'shell'
+            let target = get(a:state.shells, selection[0], 0)
+            if target > 0 && bufexists(target)
+                call s:Focus(target)
             endif
             return
         endif
@@ -201,7 +239,7 @@ function! vimproject#create(command) abort
     call s:Pick('(' . a:command . "\n) | fzf --no-multi", 'create')
 endfunction
 
-function! s:Pick(command, action) abort
+function! s:Pick(command, action, ...) abort
     if !executable('fzf')
         call s:Warn('fzf is not installed.')
         return
@@ -211,6 +249,9 @@ function! s:Pick(command, action) abort
         return
     endif
     let state = {'window': win_getid(), 'output': tempname(), 'buffer': -1, 'action': a:action}
+    if a:0
+        call extend(state, a:1)
+    endif
     let command = [&shell, &shellcmdflag, a:command . ' > ' . shellescape(state.output)]
     try
         if has('nvim')

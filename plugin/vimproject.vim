@@ -6,6 +6,7 @@ let g:loaded_vimproject = 1
 command! VimProjectOpen call vimproject#pick()
 command! VimProjectTerm call vimproject#term()
 command! VimProjectTermNew call vimproject#term(1)
+command! VimProjectTermList call vimproject#termlist()
 command! VimProjectRemove call vimproject#pick('remove')
 command! -nargs=1 -complete=dir VimProjectCd call vimproject#cd(<f-args>)
 
